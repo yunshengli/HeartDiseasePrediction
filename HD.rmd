@@ -1,0 +1,651 @@
+## The dataset
+
+```{r}
+hd <- read.table("heart.disease.txt", header = FALSE, sep = ",")
+colnames(hd) <- c("age", "sex", "cp", "trestbps", "chol", "fbs", "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal", "status")
+
+```
+
+## data description
+```{r}
+## 2 sex: (1 = male; 0 = female)
+## 3 cp: chest pain type: 
+##       Value 1: typical anging
+##       Value 2: atypical angina
+##       Value 3: non-anginal pain
+##       Value 4: asymptomatic
+## 4 trsetbps: resting blood pressure (mmHg)
+## 5 chol: serum cholestoral in mg/dl
+## 6 fbs: fasting blood sugar > 120 mg/dl (1 = true; 0 = false)
+## 7 restecg: resting electrocardiographic results: 
+##       Value 0: normal
+##       Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV)
+##       Value 2: showing probable or definite left ventricular hypertrophy by Estes' criteria
+## 8 thalach: maximum heart rate achieved
+## 9 exang: exercise induced angina (1 = yes; 0 = no)
+##10 oldpeak: ST depression induced by exercise relative to rest
+##11 slope: the slope of the peak exercise ST segment
+##       Value 1: upsloping
+##       Value 2: flat
+##       Value 3: downsloping
+##12 ca: number of major vessels (0-3) colored by flourosopy
+##13 thal: 3 = normal; 6 = fixed defect; 7 = reversable defect
+##14 status: diagnosis of heart disease (angiographic disease status)
+##       Value 0: < 50% diameter narrowing
+##       Value 1: > 50% diameter narrowing (in any major vessel: attributes 59 through 68 are vessels)
+##  The "goal" field refers to the presence of heart disease in the patient. It is integer valued from 0 (no presence) to 4. Experiments with the Cleveland database have concentrated on simply attempting to distinguish presence (values 1,2,3,4) from absence (value 0).
+```
+
+## dealing with missing Data by mice()
+install.packages("mice")
+install.packages("VIM")
+```{r, warning = FALSE, message = FALSE}
+##turn missing value into NA
+hd[hd == "?"] <- NA
+
+library(mice)
+## check the missing data pattern
+## NAs in "ca" and "thal"
+md.pattern(hd)
+
+#visualization of NA: only ca and thal have NA
+library(VIM)
+aggr(hd, col=c('navyblue','yellow'), numbers=TRUE, 
+      labels=names(hd), cex.axis=.7, gap=3, 
+      ylab=c("Missing data","Pattern"))
+
+## impute missing data 
+imputed <- mice(hd, m=5, meth = 'cart',seed = 500)
+
+##check the imputed data 
+imputed$imp$ca
+imputed$imp$thal
+
+## complete dataset
+new_hd <- complete(imputed, 1)
+new_hd$ca <- as.numeric(as.character(new_hd$ca))
+new_hd$thal <- as.numeric(as.character(new_hd$thal))
+summary(new_hd)
+nrow(new_hd[is.na(new_hd), ])
+head(new_hd)
+
+```
+```{r}
+## scale features 
+new_hd2 <- new_hd
+new_hd2$status <- ifelse(new_hd2$status == 0, "absence", "presence")
+new_hd2$status <- as.factor(new_hd2$status)
+new_hd2[,-14] <- scale(new_hd2[,-14],center = TRUE, scale = TRUE)[,]
+head(new_hd2)
+```
+
+
+## categorical value into factor
+```{r}
+new_hd$sex <- factor(new_hd$sex, labels = c("female", "male"))
+new_hd$cp <- factor(new_hd$cp, labels = c("typical", "atypical", "non-anginal", "asymptomatic"))
+new_hd$fbs <- factor(new_hd$fbs, labels = c("False", "True"))
+new_hd$restecg <- factor(new_hd$restecg, labels = c("normal", "abnorm", "hyper"))
+new_hd$exang <- factor(new_hd$exang, labels = c("no", "yes"))
+new_hd$slope <- factor(new_hd$slope, labels = c("up", "flat", "down"))
+new_hd$ca <- as.factor(new_hd$ca)
+new_hd$thal <- factor(new_hd$thal, labels = c("norm", "fix", "rev"))
+## status: "absenece" == 0, "presence" == 1-4
+new_hd$status <- ifelse(new_hd$status == 0, "absence", "presence")
+new_hd$status <- as.factor(new_hd$status)
+str(new_hd)
+
+```
+
+## Data exploration
+install.packages("ggplot2")
+install.packages("pcaGoPromoter")
+install.packages("ellipse")
+```{r}
+
+## response variable unbalanced for classification
+library(ggplot2)
+ggplot(new_hd, aes(x = status, fill = status)) + geom_bar()
+
+## deal with unbalnaced data
+##Most machine learning classification algorithms are sensitive to unbalance in the predictor classes. Let's consider an even more extreme example than our breast cancer dataset: assume we had 10 malignant vs 90 benign samples. A machine learning model that has been trained and tested on such a dataset could now predict "benign" for all samples and still gain a very high accuracy. An unbalanced dataset will bias the prediction model towards the more common class!
+
+## age variable
+ggplot(new_hd, aes(x = age)) + geom_histogram(bins = 20)
+## sex variable
+ggplot(new_hd, aes(x = sex)) + geom_bar(bins = 20)
+## cp variable
+ggplot(new_hd, aes(x = cp)) + geom_bar(bins = 20)
+## trestbps variable
+ggplot(new_hd, aes(x = trestbps)) + geom_histogram(bins = 20)
+## chol variable
+ggplot(new_hd, aes(x = chol)) + geom_histogram(bins = 20)
+## fbs variable
+ggplot(new_hd, aes(x = fbs)) + geom_bar(bins = 20)
+## restecg variable
+ggplot(new_hd, aes(x = restecg)) + geom_bar(bins = 20)
+## thalach variable
+ggplot(new_hd, aes(x = thalach)) + geom_histogram(bins = 20)
+## exang variable
+ggplot(new_hd, aes(x = exang)) + geom_bar(bins = 20)
+## oldpeak variable
+ggplot(new_hd, aes(x = oldpeak)) + geom_bar(bins = 20)
+## slope variable
+ggplot(new_hd, aes(x = slope)) + geom_bar(bins = 20)
+## ca variable
+ggplot(new_hd, aes(x = ca)) + geom_bar(bins = 20)
+## thal variable
+ggplot(new_hd, aes(x = thal)) + geom_bar(bins = 20)
+
+```
+```{r}
+## principal component analysis
+#setRepositories(ind = c(1:6, 8))
+#install.packages("pcaGoPromoter")
+#install.packages("ellipse")
+library(pcaGoPromoter)
+library(ellipse)
+
+# perform pca and extract scores
+pcaOutput <- pca(t(new_hd2[, -14]), printDropped = FALSE, scale = TRUE, center = TRUE)
+pcaOutput2 <- as.data.frame(pcaOutput$scores)
+  
+# define groups for plotting
+pcaOutput2$groups <- new_hd2$status
+  
+centroids <- aggregate(cbind(PC1, PC2) ~ groups, pcaOutput2, mean)
+
+conf.rgn  <- do.call(rbind, lapply(unique(pcaOutput2$groups), function(t)
+  data.frame(groups = as.character(t),
+             ellipse(cov(pcaOutput2[pcaOutput2$groups == t, 1:2]),
+                   centre = as.matrix(centroids[centroids$groups == t, 2:3]),
+                   level = 0.95),
+             stringsAsFactors = FALSE)))
+    
+ggplot(data = pcaOutput2, aes(x = PC1, y = PC2, group = groups, color = groups)) + 
+    geom_polygon(data = conf.rgn, aes(fill = groups), alpha = 0.2) +
+    geom_point(size = 2, alpha = 0.6) + 
+    scale_color_brewer(palette = "Set1") +
+    labs(color = "",
+         fill = "",
+         x = paste0("PC1: ", round(pcaOutput$pov[1], digits = 2) * 100, "% variance"),
+         y = paste0("PC2: ", round(pcaOutput$pov[2], digits = 2) * 100, "% variance")) 
+
+```
+
+install.packages("tidyr")
+```{r,warning = FALSE, message = FALSE}
+##features--ZYL
+library(tidyr)
+
+gather(new_hd, x, y, age:thal) %>%
+  ggplot(aes(x = y,group = status, color = status, fill = status))+
+    geom_density(alpha = 0.6) +
+    facet_wrap( ~ x, scales = "free", ncol = 3)
+```
+## machine learning packages for R 
+###caret
+install.packages("doParallel")
+install.packages("caret")
+```{r,warning = FALSE,message = FALSE}
+
+# configure multicore
+
+## detect the number of CPU cores  on the current host,
+## then creates a set of copies of R running in parallel and communicating over sockets.
+require(iterators)
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+# Training, validation and test data
+library(caret)
+
+set.seed(100)
+index <- createDataPartition(new_hd2$status, p = 0.8, list = FALSE)
+train_data2 <- new_hd2[index, ]
+test_data2 <- new_hd2[-index, ]
+
+library(dplyr)
+
+rbind(data.frame(group = "train", train_data2),
+      data.frame(group = "test", test_data2)) %>%  
+  gather(x,y,age:thal) %>%  
+  ggplot(aes(x = y, color = group, fill = group)) + 
+    geom_density(alpha = 0.3) + 
+    facet_wrap( ~ x, scales = "free", ncol = 3) 
+```
+
+```{r}
+# Regression
+#install caret package directly from github
+#install.packages("devtools")
+#devtools::install_github('topepo/caret/pkg/caret')
+#caret:::nominalTrainWorkflow
+
+set.seed(100)
+model_glm <- caret::train(status ~ .,
+                          data = train_data2,
+                          method = "glm", 
+                          #preProcess = c("scale", "center"),
+                          trControl = trainControl(method = "repeatedcv",
+                                                   number = 10,
+                                                   repeats = 10,
+                                                   savePredictions = TRUE,
+                                                   verboseIter = FALSE,
+                                                   sampling = "rose"))
+model_glm
+#RMSE a measure of accuracy. smaller, better
+#Rsquared more close to 1, stronger predictive power
+#MAE mean absolute error smaller, better
+
+#third run with rose
+#Generalized Linear Model 
+
+#244 samples
+# 13 predictor
+#  2 classes: 'absence', 'presence' 
+
+#No pre-processing
+#Resampling: Cross-Validated (10 fold, repeated 10 times) 
+#Summary of sample sizes: 220, 219, 220, 220, 220, 220, ... 
+#Addtional sampling using ROSE
+
+#Resampling results:
+
+#  Accuracy   Kappa    
+#  0.8169258  0.6314077
+
+
+#second run
+#Generalized Linear Model 
+
+#244 samples
+# 13 predictor
+#  2 classes: 'absence', 'presence' 
+
+#Pre-processing: scaled (13), centered (13) 
+#Resampling: Cross-Validated (10 fold, repeated 10 times) 
+#Summary of sample sizes: 220, 219, 220, 220, 220, 220, ... 
+#Addtional sampling using ROSE prior to pre-processing
+
+#Resampling results:
+
+#  Accuracy   Kappa    
+#  0.8155783  0.6287104
+
+
+#first run
+#RMSE a measure of accuracy. smaller, better
+#Rsquared more close to 1, stronger predictive power
+#MAE mean absolute error smaller, better
+ 
+# RMSE      Rsquared   MAE     
+# 7.796512  0.3034671  6.394941
+```
+
+install.packages("magrittr")
+```{r,message = FALSE}
+# The pipe operator %>% was introduced to "decrease development time and to improve readability and maintainability of code. install package for %>%
+
+library(magrittr)
+library(ggplot2)
+
+predictions <- predict(model_glm, test_data2)
+# model_glm$finalModel$linear.predictors == model_glm$finalMore$fitted.values
+data.frame(residuals = resid(model_glm),
+predictors = model_glm$finalModel$linear.predictors)%>%
+  ggplot(aes(x = predictors, y = residuals)) +
+    geom_jitter() +
+    geom_smooth(method = "lm")
+```
+
+```{r}
+# y == train_data$age
+data.frame(residuals = resid(model_glm),
+           y = model_glm$finalModel$y) %>%
+  ggplot(aes(x = y, y = residuals)) +
+    geom_jitter() +
+    geom_smooth(method = "lm")
+```
+
+```{r}
+data.frame(actual = test_data2$status,
+           predicted = predictions)%>%
+  ggplot(aes(x = actual, y = predicted, fill = )) +
+  geom_jitter() +
+  geom_smooth(method = "lm")
+```
+## Classification
+### Decision trees
+### rpart
+install.packages("rpart")
+install.packages("rpart.plot")
+```{r echo=FALSE}
+library(rpart)
+library(rpart.plot)
+
+set.seed(42)
+fit <- rpart(status ~ .,
+             data = train_data2,
+             method = "class",
+             control = rpart.control(sampling = "rose"),
+             parms = list(split = "information"))
+rpart.plot(fit, extra = 100)
+
+
+
+
+summary(fit) # detailed summary of splits
+
+# testing data validation
+decision_pred_2 <- predict(fit, test_data2, type = "class")
+
+#
+## feature importance
+imp <- fit$finalModel$importance
+imp[order(imp, decreasing = TRUE),]
+# estimate variable importance
+importance <- varImp(fit, scale = TRUE)
+plot(importance)
+
+
+```
+
+## ROC 
+```{r}
+library(pROC)
+decision_roc <- roc(as.numeric(test_data2$status), as.numeric(decision_pred_2))
+rf_roc <- roc(as.numeric(test_data2$status), as.numeric(rf_pred_2))
+xgb_roc <- roc(as.numeric(test_data2$status), as.numeric(xgb_pred_2))
+
+plot(decision_roc, col="red")
+lines(rf_roc, col="green")
+lines(xgb_roc, col= "blue")
+
+data.frame(model=c("decision tree", "random forest", "Extreme gradient boosting trees"), auc = c(auc(decision_roc), auc(rf_roc), auc(xgb_roc)))
+auc(decision_roc)
+auc(rf_roc)
+auc(xgb_roc)
+```
+
+##Random Forests
+Random Forests predictions are based on the generation of multiple classification trees. They can be used for both, classification and regression tasks.
+```{r}
+set.seed(42)
+model_rf <- caret::train(status ~ .,
+                         data = train_data2,
+                         method = "rf",
+                  
+                         trControl = trainControl(method = "repeatedcv", 
+                                                  number = 10, 
+                                                  repeats = 10, 
+                                                  savePredictions = TRUE, 
+                                                  verboseIter = FALSE,
+                                                  sampling = "rose"))
+
+```
+
+```{r}
+
+## confusion matrix
+model_rf$finalModel$confusion
+## cross_validation result
+model_rf$pred
+
+```
+```{r}
+## feature importance
+imp <- model_rf$finalModel$importance
+imp [order(imp, decreasing = TRUE),]
+# estimate variable importance
+importance <- varImp(model_rf, scale = TRUE)
+plot(importance)
+```
+```{r}
+## predicting test data
+
+rf_pred_2 <- predict(model_rf, test_data2)
+
+confusionMatrix(predict(model_rf, test_data2), test_data2$status, positive = "presence")
+```
+
+
+
+
+```{r}
+## plot the result
+results <- data.frame(actual = test_data2$status,
+                      predict(model_rf, test_data2, type = "prob"))
+results$prediction <- ifelse(results$presence > 0.5, "presence",
+                             ifelse(results$absence > 0.5,"absence", NA))
+results$correct <- ifelse(results$actual == results$prediction, TRUE, FALSE)
+
+ggplot(results, aes(x = prediction, fill = correct))+ 
+  geom_bar(position = "dodge")
+
+ggplot(results, aes(x = prediction, y = absence, color = correct , shape = correct)) +
+  geom_jitter(size = 3, alpha = 0.6)
+```
+##Extreme gradient boosting trees
+Extreme gradient boosting (XGBoost) is a faster and improved implementation of gradient boosting for supervised learning.
+"XGBoost uses a more regularized model formalization to control over-fitting, which gives it better performance." Tianqi Chen, developer of xgboost.
+XGBoost is a tree ensemble model, which means the sum of predictions from a set of classification and regression trees (CART). In that, XGBoost is similar to Random Forests but it uses a different approach to model training. Can be used for classification and regression tasks. 
+
+install.packages("xgboost")
+```{r}
+set.seed(42)
+model_xgb <- caret::train(status ~ .,
+                          data = train_data2,
+                          method = "xgbTree",
+                          #preProcess = c("scale","center"),
+                          trControl = trainControl(method = "repeatedcv",
+                                                   number = 10,
+                                                   repeats = 10,
+                                                   savePredictions = TRUE,
+                                                   #verboseIter = FALSE,
+                                                   sampling = "rose"))
+model_xgb
+
+```
+```{r}
+## Feature Importance
+importance <- varImp(model_xgb, scale = TRUE)
+plot(importance)
+```
+```{r}
+## predicting test data
+xgb_pred_2 <- predict(model_xgb, test_data2)
+confusionMatrix(predict(model_xgb, test_data2),test_data2$status,positive = "presence") 
+
+```
+```{r}
+results <- data.frame(actual = test_data2$status,
+                      predict(model_xgb, test_data2, type = "prob"))
+
+  results$prediction <- ifelse(results$presence> 0.5, "presence",
+                             ifelse(results$absence > 0.5, "absence", NA))
+
+  results$correct <- ifelse(results$actual == results$prediction, TRUE, FALSE)
+
+ggplot(results, aes(x = prediction, fill = correct)) +
+  geom_bar(position = "dodge")
+
+ggplot(results, aes(x = prediction, y = absence, color = correct, shape = correct)) +
+  geom_jitter(size = 3, alpha = 0.6)
+
+```
+##Feature Selection
+Performing feature selection on the whole dataset would lead to prediction bias, we therefore need to run the whole modeling process on the training data alone!
+```{r}
+##Correlation  need scale
+##Correlations between all features are calculated and visualised with the corrplot package. I am then removing all features with a correlation higher than 0.7, keeping the feature with the lower mean.
+
+##1.use scaled data
+set.seed(100)
+index <- createDataPartition(new_hd2$status, p = 0.8, list = FALSE)
+train_data2 <- new_hd2[index, ]
+test_data2 <- new_hd2[-index, ]
+
+# calculate correlation 
+library(corrplot)
+corr_numeric <- cor(train_data2[,-14])
+corr_numeric
+corrplot(corr_numeric, order = "hclust")
+
+# fileter at 0.5
+highlyCor <- colnames(train_data2[, -1])[findCorrelation(corr_numeric,cutoff = 0.5,verbose = TRUE)]
+##Compare row 10  and column  11 with corr  0.619 
+##  Means:  0.218 vs 0.154 so flagging column 10 
+##All correlations <= 0.5 
+
+## which variables are flagged for removal?
+highlyCor
+
+## then we remove these variables
+train_data2_cor <- train_data2[,which(!colnames(train_data2) %in% highlyCor)]
+head(train_data2_cor)
+
+
+```
+
+```{r}
+## Recursive Feature Elimination
+##Another way to choose features is with Recursive Feature Elimination. RFE uses a Random Forest algorithm to test combinations of features and rate each with an accuracy score. The combination with the highest score is usually preferential.
+set.seed(7)
+results_rfe <- rfe(x = train_data2[,-14],
+                   y = train_data2$status,
+                   sizes = c(1:13),
+                   rfeControl = rfeControl(functions = rfFuncs,
+                                           method = "cv", number = 10)
+                   )
+## chosen features
+predictors(results_rfe)
+train_data2_rfe <- train_data2[,c(which(colnames(train_data2) %in% predictors(results_rfe)),14)]
+model_3 <- test_data2[,c(which(colnames(test_data2) %in% predictors(results_rfe)),14)]
+head(train_data2_rfe)
+
+```
+```{r}
+##    Genetic Algorithm (GA)
+
+#The Genetic Algorithm (GA) has been developed based on evolutionary principles of natural selection: It aims to optimize a population of individuals with a given set of genotypes by modeling selection over time. In each generation (i.e. iteration), each individual's fitness is calculated based on their genotypes. Then, the fittest individuals are chosen to produce the next generation. This subsequent generation of individuals will have genotypes resulting from (re-) combinations of the parental alleles. These new genotypes will again determine each individual's fitness. This selection process is iterated for a specified number of generations and (ideally) leads to fixation of the fittest alleles in the gene pool.
+
+#This concept of optimization can be applied to non-evolutionary models as well, like feature selection processes in machine learning.
+
+set.seed(27)
+model_ga <- gafs(x = train_data2[, -14], 
+                 y = train_data2$status,
+                 iters = 10, # generations of algorithm
+                 popSize = 10, # population size for each generation
+                 levels = c("presence", "absence"),
+                 gafsControl = gafsControl(functions = rfGA, # Assess fitness with RF
+                                           method = "cv",    # 10 fold cross validation
+                                           genParallel = TRUE, # Use parallel programming
+                                           allowParallel = TRUE))
+
+plot(model_ga) # Plot mean fitness (AUC) by generation
+
+```
+
+##Grid search with caret
+```{r}
+## Automatic Grid
+set.seed(42)
+model_rf_tune_auto <- caret::train(status ~ .,
+                         data = train_data2_rfe,
+                         method = "rf",
+                        # preProcess = c("scale", "center"),
+                         trControl = trainControl(method = "repeatedcv", 
+                                                  number = 10, 
+                                                  repeats = 10, 
+                                                  savePredictions = TRUE, 
+                                                  verboseIter = FALSE,
+                                                  search = "random",
+                                                  sampling = "rose"),
+                         tuneLength = 15)
+
+model_rf_tune_auto
+plot(model_rf_tune_auto)
+
+results <- data.frame(actual = test_data2_rfe$status,
+                      predict(model_rf_tune_auto, test_data2_rfe, type = "prob"))
+
+  results$prediction <- ifelse(results$presence> 0.5, "presence",
+                             ifelse(results$absence > 0.5, "absence", NA))
+
+  results$correct <- ifelse(results$actual == results$prediction, TRUE, FALSE)
+
+ggplot(results, aes(x = prediction, fill = correct)) +
+  geom_bar(position = "dodge")
+
+ggplot(results, aes(x = prediction, y = absence, color = correct, shape = correct)) +
+  geom_jitter(size = 3, alpha = 0.6)
+```
+
+```{r}
+## predicting test data
+rfe_pred_2 <- predict(model_rf_tune_auto, test_data2_rfe)
+confusionMatrix(rfe_pred_2,test_data2_rfe$status,positive = "presence") 
+
+##
+ref_roc <- roc(as.numeric(test_data2_rfe$status), as.numeric(rfe_pred_2))
+
+plot(ref_roc, col="purple")
+lines(decision_roc, col="red")
+lines(rf_roc, col="green")
+lines(xgb_roc, col= "blue")
+
+
+```
+```{r}
+train_data3 <- train_data2[,-c(2,6)]
+test_data3 <- test_data2[,-c(2,6)]
+head(train_data3)
+
+set.seed(42)
+model_3 <- caret::train(status ~ .,
+                         data = train_data3,
+                         method = "rf",
+                        # preProcess = c("scale", "center"),
+                         trControl = trainControl(method = "repeatedcv", 
+                                                  number = 10, 
+                                                  repeats = 10, 
+                                                  savePredictions = TRUE, 
+                                                  verboseIter = FALSE,
+                                                  search = "random",
+                                                  sampling = "rose"),
+                         tuneLength = 15)
+
+model_3
+plot(model_3)
+
+results <- data.frame(actual = train_data3$status,
+                      predict(model_3, train_data3, type = "prob"))
+
+  results$prediction <- ifelse(results$presence> 0.5, "presence",
+                             ifelse(results$absence > 0.5, "absence", NA))
+
+  results$correct <- ifelse(results$actual == results$prediction, TRUE, FALSE)
+
+ggplot(results, aes(x = prediction, fill = correct)) +
+  geom_bar(position = "dodge")
+
+ggplot(results, aes(x = prediction, y = absence, color = correct, shape = correct)) +
+  geom_jitter(size = 3, alpha = 0.6)
+
+
+
+
+## predicting test data
+rfe_pred_3 <- predict(model_3, train_data3)
+confusionMatrix(rfe_pred_3,train_data3$status,positive = "presence") 
+
+##
+ref_roc3 <- roc(as.numeric(train_data3$status), as.numeric(rfe_pred_3))
+
+plot(ref_roc3, col="purple")
+lines(decision_roc, col="red")
+lines(rf_roc, col="green")
+lines(xgb_roc, col= "blue")
+```
